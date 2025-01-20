@@ -1,10 +1,8 @@
 import { app } from "./app";
-import "./commands/askCommand";
-import "./commands/helpQnaCommand";
+import "./loadCommands";
 import "./events/messageHandler";
-import "./events/actionHandler";
 
 (async () => {
-  await app.start(process.env.PORT || 3000);
-  console.log("⚡️ Q&A Chatbot Bolt app is running again!");
+  await app.login(process.env.DISCORD_BOT_TOKEN);
+  console.log("⚡️ Q&A Chatbot Discord app is running again!");
 })();

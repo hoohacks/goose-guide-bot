@@ -1,39 +1,26 @@
-import {
-  GenericMessageEvent,
-  FileShareMessageEvent,
-  ThreadBroadcastMessageEvent,
-} from "@slack/bolt";
-
 import { app } from "../app";
+import { EmojiIdentifierResolvable, Message } from "discord.js";
 
 export const reactToMessage = async (
-  message:
-    | GenericMessageEvent
-    | FileShareMessageEvent
-    | ThreadBroadcastMessageEvent,
-  reaction: string,
+  message: Message,
+  reaction: EmojiIdentifierResolvable,
   operation = "add"
 ) => {
   try {
     if (operation === "add") {
-      await app.client.reactions.add({
-        name: reaction,
-        channel: message.channel,
-        timestamp: message.ts,
-      });
+      message.react(reaction);
     } else if (operation === "remove") {
-      await app.client.reactions.remove({
-        name: reaction,
-        channel: message.channel,
-        timestamp: message.ts,
-      });
+      const reactions = message.reactions.cache.filter(r => r.users.cache.has(app.user?.id ?? ""));
+      for (const r of reactions.values()) {
+        await r.users.remove(app.user?.id ?? "");
+      }
     } else {
       console.error(`Invalid operation ${operation} for reactToMessage`);
       return;
     }
   } catch (error) {
     console.error(
-      `Failed to add reaction ${reaction} to message ${message.ts}`
+      `Failed to add reaction ${reaction} to message ${message}`,
     );
   }
 };

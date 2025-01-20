@@ -18,4 +18,6 @@ export const {
   AIRTABLE_BASE_ID,
   CONVERSATION_TABLE_ID,
   ANNOUNCEMENT_TABLE_ID,
+  DISCORD_BOT_TOKEN,
+  DISCORD_CLIENT_ID
 } = process.env as Record<string, string>;

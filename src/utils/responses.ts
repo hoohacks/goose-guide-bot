@@ -1,95 +1,76 @@
-import {
-  GenericMessageEvent,
-  FileShareMessageEvent,
-  ThreadBroadcastMessageEvent,
-  MessageAttachment,
-} from "@slack/bolt";
-
+import { Attachment, AttachmentBuilder, ButtonInteraction, CommandInteraction, Interaction, Message, MessageFlags } from "discord.js";
 import { app } from "../app";
 import { MONITORING_CHANNEL, MAINTAINER_PING } from "../config";
 
 export const replyThread = async (
-  message:
-    | GenericMessageEvent
-    | FileShareMessageEvent
-    | ThreadBroadcastMessageEvent,
+  message: Message,
   text: string,
-  attachements?: MessageAttachment[]
+  attachements?: AttachmentBuilder[]
 ) => {
   try {
-    await app.client.chat.postMessage({
-      channel: message.channel,
-      thread_ts: message.thread_ts || message.ts,
-      text: text,
-      attachments: attachements,
+    return await message.reply({
+      content: text,
+      files: attachements
     });
   } catch (error) {
     console.error(
-      `Failed to reply to thread ${message.ts} in ${message.channel} with text ${text} and ${attachements?.length} attachements`,
+      `Failed to reply to thread ${message} in ${message.channel} with text ${text} and ${attachements?.length} attachements`,
       error
     );
+
+    return message;
   }
 };
 
-export const replyEphemeralThread = async (
-  message:
-    | GenericMessageEvent
-    | FileShareMessageEvent
-    | ThreadBroadcastMessageEvent,
+// export const replyEphemeralThread = async (
+//   interaction: CommandInteraction,
+//   text: string
+// ) => {
+//   try {
+//     await interaction.reply({
+//       content: text,
+//       flags: MessageFlags.Ephemeral,
+//     });
+//   } catch (error) {
+//     console.error(
+//       `Failed to reply to thread emphemeral ${interaction.commandId} in ${interaction.channel} with text ${text}`,
+//       error
+//     );
+//   }
+// };
+
+// export const replyEphemeralThreadManual = async (
+//   channel: string,
+//   thread_ts: string,
+//   text: string,
+//   user: string
+// ) => {
+//   try {
+//     await app.client.chat.postEphemeral({
+//       channel: channel,
+//       thread_ts: thread_ts,
+//       user: user,
+//       text: text,
+//     });
+//   } catch (error) {
+//     console.error(
+//       `Failed to reply to thread emphemeral manual ${thread_ts} in ${channel} with text ${text}`,
+//       error
+//     );
+//   }
+// };
+
+export const deferReplyInteraction = async (
+  interaction: ButtonInteraction,
   text: string
 ) => {
   try {
-    await app.client.chat.postEphemeral({
-      channel: message.channel,
-      user: message.user,
-      thread_ts: message.thread_ts || message.ts,
-      text: text,
+    await interaction.editReply({
+      content: text
     });
   } catch (error) {
     console.error(
-      `Failed to reply to thread emphemeral ${message.ts} in ${message.channel} with text ${text}`,
-      error
-    );
-  }
-};
-
-export const replyEphemeralThreadManual = async (
-  channel: string,
-  thread_ts: string,
-  text: string,
-  user: string
-) => {
-  try {
-    await app.client.chat.postEphemeral({
-      channel: channel,
-      user: user,
-      thread_ts: thread_ts,
-      text: text,
-    });
-  } catch (error) {
-    console.error(
-      `Failed to reply to thread emphemeral manual ${thread_ts} in ${channel} with text ${text}`,
-      error
-    );
-  }
-};
-
-export const replyEphemeralChannel = async (
-  message:
-    | GenericMessageEvent
-    | FileShareMessageEvent
-    | ThreadBroadcastMessageEvent,
-  text: string
-) => {
-  try {
-    await app.client.chat.postEphemeral({
-      channel: message.channel,
-      user: message.user,
-      text: text,
-    });
-  } catch (error) {
-    console.error(
-      `Failed to reply to emphemeral ${message.ts} in ${message.channel} with text ${text}`,
+      `Failed to reply to emphemeral ${interaction} in ${interaction.message} with text ${text}`,
       error
     );
   }
@@ -97,12 +78,9 @@ export const replyEphemeralChannel = async (
 
 export const postMonitoringMessage = async (text: string) => {
   try {
-    await app.client.chat.postMessage({
-      channel: MONITORING_CHANNEL,
-      text: text,
-      unfurl_links: false,
-      unfurl_media: false,
-    });
+    const channel = await app.channels.fetch(MONITORING_CHANNEL);
+    if (channel && "send" in channel)
+      channel.send(text);
   } catch (error) {
     console.error(`Failed to post monitoring message ${text}`, error);
   }
@@ -110,12 +88,9 @@ export const postMonitoringMessage = async (text: string) => {
 
 export const postMaintainerNotification = async (text: string) => {
   try {
-    await app.client.chat.postMessage({
-      channel: MONITORING_CHANNEL,
-      text: `<${MAINTAINER_PING}> ${text}`,
-      unfurl_links: false,
-      unfurl_media: false,
-    });
+    const channel = await app.channels.fetch(MONITORING_CHANNEL);
+    if (channel && "send" in channel)
+      channel.send(`<${MAINTAINER_PING}> ${text}`);
   } catch (error) {
     console.error(`Failed to post maintainer notification ${text}`, error);
   }

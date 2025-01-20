@@ -8,25 +8,19 @@ import {
   INSERT_KB_CHANNEL,
 } from "../config";
 
-app.message("", async ({ message }) => {
+app.on("messageCreate", async (message) => {
   try {
-    if (
-      (message.subtype === undefined ||
-        message.subtype === "file_share" ||
-        message.subtype === "thread_broadcast") &&
-      (message as any).bot_id === undefined &&
-      message.text
-    ) {
+    if (message.author.bot === false && message.content) {
       const isQuestion =
-        message.channel === QUESTIONS_CHANNEL || message.channel_type === "im";
-      const isThread = (message as any).thread_ts !== undefined;
-      const isAnnouncement = message.channel === ANNOUNCEMENTS_CHANNEL;
-      const isKBInsert = message.channel === INSERT_KB_CHANNEL;
+        message.channelId === QUESTIONS_CHANNEL || message.channel.isDMBased();
+      const isThread = message.channel.isThread();
+      const isAnnouncement = message.channelId === ANNOUNCEMENTS_CHANNEL;
+      const isKBInsert = message.channelId === INSERT_KB_CHANNEL;
 
       if (isQuestion && isThread) {
         await handleUserThreadReply(message);
       } else if (isQuestion) {
-        if (!message.text.toLowerCase().includes("[no ai]")) {
+        if (!message.content.toLowerCase().includes("[no ai]")) {
           await handleUserQuestion(message);
         }
       } else if (isAnnouncement && !isThread) {

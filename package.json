@@ -18,8 +18,11 @@
   },
   "homepage": "https://github.com/hackathon/qna-chatbot#readme",
   "dependencies": {
-    "@slack/bolt": "^3.19.0",
-    "dotenv": "^16.4.5"
+    "@discordjs/rest": "^2.4.2",
+    "axios": "^1.7.9",
+    "discord-api-types": "^0.37.117",
+    "discord.js": "^14.17.3",
+    "dotenv": "^16.4.7"
   },
   "devDependencies": {
     "@types/node": "^22.2.0",

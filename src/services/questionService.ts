@@ -1,10 +1,3 @@
-import {
-  GenericMessageEvent,
-  FileShareMessageEvent,
-  ThreadBroadcastMessageEvent,
-  MessageAttachment,
-} from "@slack/bolt";
-
 import { app } from "../app";
 import {
   voiceflowInteract,
@@ -22,34 +15,29 @@ import {
 import { replySatisfactionButtons } from "../utils/buttons";
 
 import { EMERGENCY_PING, FAILED_ANSWER_PING } from "../config";
+import { AttachmentBuilder, Message } from "discord.js";
 
 export const handleUserQuestion = async (
-  message:
-    | GenericMessageEvent
-    | FileShareMessageEvent
-    | ThreadBroadcastMessageEvent
+  message: Message
 ) => {
-  const userID = `${message.user}-${message.ts}`;
+  const userID = `${message.author.id}-${message.id}`;
 
-  const reaction = reactToMessage(message, "robot_face");
+  const reaction = reactToMessage(message, "🤖");
 
   console.log(`Question from ${userID}.`);
 
   try {
-    const timeAsked = parseFloat(message.ts);
-    const questionMessageLink = await app.client.chat.getPermalink({
-      channel: message.channel,
-      message_ts: message.ts,
-    });
+    const timeAsked = message.createdTimestamp;
+    const questionMessageLink = await message.url;
     const vfLaunch = await voiceflowInteract(userID, { type: "launch" });
     const vfReply = await voiceflowInteract(userID, {
       type: "text",
-      payload: message.text,
+      payload: message.content,
     });
     const transcriptReply = voiceflowSaveTranscript(userID);
 
     let outputText = "";
-    let attachments: MessageAttachment[] = [];
+    let attachments: AttachmentBuilder[] = [];
 
     let end_type = "";
     let end_reason = "";
@@ -62,11 +50,9 @@ export const handleUserQuestion = async (
         trace.type === "visual" &&
         trace.payload.visualType === "image"
       ) {
-        attachments.push({
-          fallback: "Q&A Chatbot sent an image",
-          image_url: trace.payload.image,
-          thumb_url: trace.payload.image,
-        });
+        const response = await fetch(trace.payload.image);
+        const buffer = Buffer.from(await response.arrayBuffer());
+        attachments.push(new AttachmentBuilder(buffer, { name: trace.payload.image.split("/").pop() }));
       } else if (trace.type.includes("answer_")) {
         end_type = trace.type;
         end_reason = trace.payload.reason;
@@ -81,21 +67,20 @@ export const handleUserQuestion = async (
     // remove the last two newlines
     outputText = outputText.trimEnd();
 
-    if (outputText || attachments.length > 0) {
-      await replyThread(message, outputText, attachments);
-    }
+    const threadStartMessage = (outputText || attachments.length > 0) ? await replyThread(message, outputText, attachments) : message;
+
     const timeAnswered = new Date().getTime() / 1000;
 
     const transcriptUrl = makeTranscriptUrl((await transcriptReply).data._id);
     const locationmessage =
-      message.channel[0] === "D"
+      message.channel.isDMBased()
         ? "in a DM"
-        : `in <#${message.channel}>, see thread <${questionMessageLink.permalink}|here>`;
-    const coreMonitoringMessage = `<@${message.user}> asked \`${message.text}\` ${locationmessage}. Voiceflow debug <${transcriptUrl}|transcript>. End type: \`${end_type}\`. End reason: \`${end_reason}\` Answer score \`${answer_score}\``; // todo: add better conditions for if the permalink fetch doesnt work well
+        : `in ${message.channel}, see thread [here](${questionMessageLink})`;
+    const coreMonitoringMessage = `${message.author} asked \`${message.content}\` ${locationmessage}. Voiceflow debug [transcript](${transcriptUrl}).\n\nEnd type: \`${end_type}\`.\n\nEnd reason: \`${end_reason}\`\n\nAnswer score \`${answer_score}\``; // todo: add better conditions for if the permalink fetch doesnt work well
 
     if (end_type === "answer_emergency") {
       await postMonitoringMessage(
-        `:rotating_light: :rotating_light: Emergency question detected from <@${message.user}>. ${coreMonitoringMessage} <${EMERGENCY_PING}> :rotating_light: :rotating_light:`
+        `:rotating_light: :rotating_light: Emergency question detected from ${message.author}. ${coreMonitoringMessage} <${EMERGENCY_PING}> :rotating_light: :rotating_light:`
       );
     } else if (end_type === "answer_fail") {
       await postMonitoringMessage(
@@ -108,7 +93,7 @@ export const handleUserQuestion = async (
         parseInt(answer_score) <= 2
       ) {
         await postMonitoringMessage(
-          `:large_blue_square: *Low confidence answer* ${coreMonitoringMessage} <${FAILED_ANSWER_PING}>`
+          `:blue_square: *Low confidence answer* ${coreMonitoringMessage} <${FAILED_ANSWER_PING}>`
         );
       } else {
         await postMonitoringMessage(
@@ -121,35 +106,35 @@ export const handleUserQuestion = async (
 
     const conversationRecordID = await createConversationRecord({
       convo_id: userID,
-      question: message.text,
+      question: message.content,
       answer: outputText,
-      user_id: message.user,
+      user_id: message.author.id,
       end_type,
       end_reason,
       answer_score,
       time_asked: timeAsked,
       time_answered: timeAnswered,
-      slack_permalink: questionMessageLink.permalink ?? "No link",
+      slack_permalink: questionMessageLink ?? "No link",
       vf_transcript: transcriptUrl,
-      channel: message.channel,
+      channel: message.channel.id,
     }).catch(async () => {
       await postMaintainerNotification(
-        `Failed to save conversation record for <@${message.user}>. Likely a problem with airtable, could be running out of rows (max 1000 on free plan), in which case you should download the data and clear it`
+        `Failed to save conversation record for ${message.author}. Likely a problem with airtable, could be running out of rows (max 1000 on free plan), in which case you should download the data and clear it`
       );
       return "";
     });
-    const buttonPayload = `${message.user}|${conversationRecordID}`;
+    const buttonPayload = `${message.author.id}|${conversationRecordID}`;
 
-    await replySatisfactionButtons(message, buttonPayload);
+    await replySatisfactionButtons(threadStartMessage, buttonPayload);
   } catch (error) {
     await replyThread(
       message,
       "We weren't able to respond to your question. An organizer will help you shortly."
     );
     await postMonitoringMessage(
-      `:interrobang: Code error to question from <@${message.user}>: ${message.text}`
+      `:interrobang: Code error to question from ${message.author}: ${message.content}`
     );
   }
   await reaction;
-  await reactToMessage(message, "robot_face", "remove");
+  await reactToMessage(message, "🤖", "remove");
 };

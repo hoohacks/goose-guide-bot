@@ -1,18 +1,10 @@
-import {
-  GenericMessageEvent,
-  FileShareMessageEvent,
-  ThreadBroadcastMessageEvent,
-} from "@slack/bolt";
-
-import { replyEphemeralThread } from "../utils/responses";
+import { replyThread } from "../utils/responses";
+import { Message } from "discord.js";
 
 export const handleUserThreadReply = async (
-  message:
-    | GenericMessageEvent
-    | FileShareMessageEvent
-    | ThreadBroadcastMessageEvent
+  message: Message
 ) => {
-  await replyEphemeralThread(
+  await replyThread(
     message,
     "To ask a question, ask in the main channel, not in a thread."
   );

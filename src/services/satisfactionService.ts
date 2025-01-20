@@ -1,26 +1,24 @@
-import { BlockAction } from "@slack/bolt";
-
-import { app } from "../app";
 import { updateConversationSatisfaction } from "../apis/airtable";
 import { FAILED_ANSWER_PING } from "../config";
 import { updateSatisfactionButtons } from "../utils/buttons";
 import {
-  replyEphemeralThreadManual,
   postMonitoringMessage,
+  deferReplyInteraction,
 } from "../utils/responses";
+import { ActionRowBuilder, ButtonBuilder, ButtonInteraction, MessageFlags } from "discord.js";
 
-export const handleSatisfactionButton = async (body: BlockAction) => {
-  const action = body.actions[0];
-  const action_id = action.action_id;
+export const handleSatisfactionButton = async (interaction: ButtonInteraction, actionRow: ActionRowBuilder<ButtonBuilder>) => {
+  await interaction.deferReply({
+    flags: MessageFlags.Ephemeral
+  });
 
-  const payload = (action as any)?.value;
+  const [action_id, payload] = interaction.customId.split("__");
   const [questionUser, airtableRecordID] = payload.split("|");
 
-  const channel = body.channel?.id;
-  const buttonMessageTs = body.message?.ts;
-  const threadTs = body.message?.thread_ts;
+  const channel = interaction.channel;
+  const buttonMessageTs = interaction.message?.id;
 
-  if (questionUser === body.user.id) {
+  if (questionUser === interaction.user.id) {
     if (channel && buttonMessageTs) {
       const convo_fields = await updateConversationSatisfaction(
         airtableRecordID,
@@ -28,46 +26,39 @@ export const handleSatisfactionButton = async (body: BlockAction) => {
       );
       if (action_id === "satisfaction_yes") {
         await updateSatisfactionButtons(
-          channel,
-          buttonMessageTs,
+          interaction,
+          actionRow,
           ":partying_face: Glad to hear the automated answer was helpful! Thanks for your feedback, and enjoy the event!"
         );
       } else if (action_id === "satisfaction_no") {
         await updateSatisfactionButtons(
-          channel,
-          buttonMessageTs,
+          interaction,
+          actionRow,
           ":thumbsup: Okay, good to hear that you're all right. If you have any more questions, please don't hestitate to ask."
         );
       } else if (action_id === "satisfaction_help_me") {
         await updateSatisfactionButtons(
-          channel,
-          buttonMessageTs,
+          interaction,
+          actionRow,
           "Got it, thanks for your feedback. An organizer will come help you soon."
         );
-        const originalQuestionLink = (
-          await app.client.chat.getPermalink({
-            channel: channel,
-            message_ts: threadTs,
-          })
-        )?.permalink;
+        const originalQuestionLink = interaction.message?.url;
         await postMonitoringMessage(
-          `:question: <${questionUser}> still wants help after automated response. Find it <${originalQuestionLink}|here> <${FAILED_ANSWER_PING}>\n\nQuestion:\`${convo_fields?.question}\`\n\nAnswer:\`\`\`${convo_fields?.answer}\`\`\``
+          `:question: ${interaction.user} still wants help after automated response. Find it [here](${originalQuestionLink}). <${FAILED_ANSWER_PING}>\n\nQuestion:\`${convo_fields?.question}\`\n\nAnswer:\`\`\`${convo_fields?.answer}\`\`\``
         );
       } else {
         await updateSatisfactionButtons(
-          channel,
-          buttonMessageTs,
+          interaction,
+          actionRow,
           `Thanks. ${action_id}`
         );
       }
     }
   } else {
     if (channel && buttonMessageTs) {
-      await replyEphemeralThreadManual(
-        channel,
-        threadTs,
-        "Only the original owner can give this answer",
-        body.user.id
+      await deferReplyInteraction(
+        interaction,
+        "Only the original owner can give this answer"
       );
     }
   }
